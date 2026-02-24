@@ -9,7 +9,7 @@ interface QuizQuestionProps {
   onAnswer: (answer: string | string[]) => void;
 }
 
-export default function QuizQuestion({
+export default function QuizQuestion(){
   question,
   questionNumber,
   selectedAnswer,

@@ -1,0 +1,296 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design Tokens */
+:root {
+  /* Primary brand color - Sky Blue */
+  --primary: #38bdf8;
+  --primary-dark: #0284c7;
+  
+  /* Neutrals - Dark theme */
+  --background: #020617;
+  --surface: #0f172a;
+  --surface-secondary: #1e293b;
+  --border: #334155;
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  
+  /* Accents */
+  --success: #22c55e;
+  --error: #ef4444;
+  --warning: #f59e0b;
+  --info: #06b6d4;
+  
+  /* Radius */
+  --radius: 0.5rem;
+}
+
+/* Light mode support (optional) */
+@media (prefers-color-scheme: light) {
+  :root {
+    --background: #ffffff;
+    --surface: #f8fafc;
+    --surface-secondary: #f1f5f9;
+    --border: #cbd5e1;
+    --text-primary: #1e293b;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-background text-text-primary;
+    background: linear-gradient(180deg, #020617 0%, #0f172a 100%);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-primary font-semibold;
+  }
+
+  button {
+    @apply transition-all duration-300;
+  }
+
+  input, textarea, select {
+    @apply bg-surface-secondary text-text-primary border border-border rounded transition-colors;
+    @apply focus:outline-none focus:border-primary focus:ring-2;
+    focus-ring-color: rgba(56, 189, 248, 0.2);
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    @apply w-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-surface;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded hover:bg-text-secondary;
+  }
+}
+
+@layer components {
+  /* Container */
+  .container {
+    @apply mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Card */
+  .card {
+    @apply bg-surface border border-border rounded-lg p-6 shadow-lg;
+  }
+
+  .card-header {
+    @apply bg-surface border border-border rounded-lg p-6 shadow-lg mb-4;
+  }
+
+  .card-body {
+    @apply bg-surface border border-border rounded-lg p-6 shadow-lg;
+  }
+
+  /* Button variations */
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary text-background hover:bg-primary-dark shadow-lg hover:shadow-xl;
+  }
+
+  .btn-secondary {
+    @apply btn bg-surface-secondary text-primary border border-primary hover:bg-surface;
+  }
+
+  .btn-ghost {
+    @apply btn text-text-primary hover:bg-surface-secondary;
+  }
+
+  .btn-danger {
+    @apply btn bg-error text-white hover:bg-red-600;
+  }
+
+  /* Progress bar */
+  .progress-bar {
+    @apply w-full h-2 bg-surface-secondary rounded-full overflow-hidden;
+  }
+
+  .progress-fill {
+    @apply h-full bg-primary transition-all duration-300;
+  }
+
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium;
+  }
+
+  .badge-primary {
+    @apply badge text-primary;
+    background-color: rgba(56, 189, 248, 0.2);
+  }
+
+  .badge-success {
+    @apply badge text-success;
+    background-color: rgba(34, 197, 94, 0.2);
+  }
+
+  .badge-error {
+    @apply badge text-error;
+    background-color: rgba(239, 68, 68, 0.2);
+  }
+
+  /* Alert */
+  .alert {
+    @apply p-4 rounded-lg border mb-4;
+  }
+
+  .alert-info {
+    @apply alert text-info;
+    background-color: rgba(6, 182, 212, 0.1);
+    border-color: rgba(6, 182, 212, 0.3);
+  }
+
+  .alert-success {
+    @apply alert text-success;
+    background-color: rgba(34, 197, 94, 0.1);
+    border-color: rgba(34, 197, 94, 0.3);
+  }
+
+  .alert-error {
+    @apply alert text-error;
+    background-color: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+
+  .alert-warning {
+    @apply alert text-warning;
+    background-color: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.3);
+  }
+
+  /* Loading shimmer */
+  @keyframes shimmer {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  .animate-shimmer {
+    animation: shimmer 2s infinite;
+  }
+
+  /* Glassmorphism effect */
+  .glass {
+    @apply backdrop-blur-md border rounded-lg;
+    background-color: rgba(15, 23, 42, 0.3);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    background: linear-gradient(135deg, #38bdf8 0%, #06b6d4 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Section spacing */
+  .section {
+    @apply py-8 sm:py-12 lg:py-16;
+  }
+
+  /* Form group */
+  .form-group {
+    @apply mb-4;
+  }
+
+  .form-label {
+    @apply block text-sm font-medium text-text-primary mb-2;
+  }
+
+  .form-input {
+    @apply w-full bg-surface-secondary text-text-primary border border-border rounded-lg px-4 py-2;
+    @apply focus:outline-none focus:border-primary focus:ring-2;
+    focus-ring-color: rgba(56, 189, 248, 0.2);
+  }
+
+  .form-textarea {
+    @apply form-input resize-none;
+  }
+
+  .form-select {
+    @apply form-input cursor-pointer;
+  }
+
+  /* Question card */
+  .question-card {
+    @apply card border-2 border-border transition-colors;
+  }
+  
+  .question-card:hover {
+    border-color: rgba(56, 189, 248, 0.5);
+  }
+
+  /* Option card */
+  .option-card {
+    @apply p-4 border border-border rounded-lg cursor-pointer transition-all duration-200;
+    @apply hover:border-primary hover:bg-surface-secondary;
+  }
+
+  .option-card.selected {
+    @apply border-primary;
+    background-color: rgba(56, 189, 248, 0.1);
+  }
+
+  .option-card.correct {
+    @apply border-success;
+    background-color: rgba(34, 197, 94, 0.1);
+  }
+
+  .option-card.incorrect {
+    @apply border-error;
+    background-color: rgba(239, 68, 68, 0.1);
+  }
+
+  /* Header styles */
+  .header {
+    @apply bg-surface border-b border-border sticky top-0 z-40;
+  }
+
+  .header-content {
+    @apply container flex items-center justify-between py-4;
+  }
+
+  .logo {
+    @apply text-2xl font-bold text-primary flex items-center gap-2;
+  }
+
+  .logo-text {
+    text-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
+  }
+
+  /* Mirai header branding */
+  .mirai-header {
+    @apply p-8 rounded-xl mb-8 text-center;
+    @apply backdrop-blur-md;
+    background-color: rgba(15, 23, 42, 0.3);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+  }
+
+  .mirai-title {
+    @apply text-3xl sm:text-4xl font-bold text-primary mb-2;
+  }
+
+  .mirai-subtitle {
+    @apply text-text-secondary text-sm sm:text-base tracking-widest uppercase;
+  }
+}
+
+

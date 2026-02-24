@@ -8,7 +8,7 @@ import { Question, selectRandomQuestions, calculateScore, generateResult } from 
 import QuizStart from '@/components/quiz-start';
 import QuizQuestion from '@/components/quiz-question';
 
-export default function QuizPage(): JSX.Element {
+export default function QuizPage() {
   const router = useRouter();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selectedQuestions, setSelectedQuestions] = useState<Question[]>([]);

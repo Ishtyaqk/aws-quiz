@@ -1,19 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Header } from '@/components/header';
 import { QuizResult, WrongQuestion } from '@/lib/quiz-utils';
 
-export default function QuizCompletePage() {
+function QuizCompleteContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [result, setResult] = useState<QuizResult | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get result data from session storage or URL params
     const resultData = sessionStorage.getItem('last_quiz_result');
     if (resultData) {
       try {
@@ -62,7 +61,6 @@ export default function QuizCompletePage() {
       <Header />
       <div className="container py-8">
         <div className="max-w-4xl mx-auto">
-          {/* Result Header */}
           <div className="text-center mb-12">
             <h1 className="text-4xl md:text-5xl font-bold mb-4">
               {isPassed ? 'Congratulations!' : 'Keep Practicing!'}
@@ -75,16 +73,13 @@ export default function QuizCompletePage() {
             </p>
           </div>
 
-          {/* Score Card */}
           <div className={`card mb-8 border-2 ${
             isPassed ? 'border-success bg-success/5' : 'border-error bg-error/5'
           }`}>
             <div className="grid md:grid-cols-4 gap-4 text-center">
               <div>
                 <div className="text-sm text-text-secondary mb-2">Score</div>
-                <div className="text-4xl font-bold text-primary">
-                  {result.score}/{result.total}
-                </div>
+                <div className="text-4xl font-bold text-primary">{result.score}/{result.total}</div>
               </div>
               <div>
                 <div className="text-sm text-text-secondary mb-2">Percentage</div>
@@ -107,13 +102,11 @@ export default function QuizCompletePage() {
             </div>
           </div>
 
-          {/* Wrong Answers Section */}
           {result.wrong_questions.length > 0 && (
             <div className="mb-12">
               <h2 className="text-2xl font-bold mb-6">
                 Review Incorrect Answers ({result.wrong_questions.length})
               </h2>
-
               <div className="space-y-4">
                 {result.wrong_questions.map((wrong, idx) => (
                   <div key={idx} className="card border border-error/30">
@@ -121,21 +114,17 @@ export default function QuizCompletePage() {
                       <h3 className="font-bold text-lg mb-2">Question {idx + 1}</h3>
                       <p className="text-text-secondary">{wrong.question}</p>
                     </div>
-
                     <div className="space-y-2">
                       {wrong.options.map(opt => {
                         const userSelected = Array.isArray(wrong.user_answer)
                           ? wrong.user_answer.includes(opt.letter)
                           : wrong.user_answer === opt.letter;
-
                         const isCorrect = Array.isArray(wrong.correct_answer)
                           ? wrong.correct_answer.includes(opt.letter)
                           : wrong.correct_answer === opt.letter;
-
                         let optionClass = 'option-card';
                         if (isCorrect) optionClass += ' correct';
                         if (userSelected && !isCorrect) optionClass += ' incorrect';
-
                         return (
                           <div key={opt.letter} className={optionClass}>
                             <div className="flex gap-3">
@@ -154,14 +143,12 @@ export default function QuizCompletePage() {
             </div>
           )}
 
-          {/* Summary Box */}
           <div className="grid md:grid-cols-2 gap-6 mb-8">
             <div className="card">
               <h3 className="font-bold text-lg mb-4">Correct Answers</h3>
               <div className="text-3xl font-bold text-success">{result.score}</div>
               <p className="text-text-secondary text-sm">out of {result.total} questions</p>
             </div>
-
             <div className="card">
               <h3 className="font-bold text-lg mb-4">Incorrect Answers</h3>
               <div className="text-3xl font-bold text-error">{result.total - result.score}</div>
@@ -171,20 +158,28 @@ export default function QuizCompletePage() {
             </div>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4">
-            <Link href="/quiz" className="btn btn-primary flex-1 justify-center">
-              Take Another Test
-            </Link>
-            <Link href="/results" className="btn btn-secondary flex-1 justify-center">
-              View All Results
-            </Link>
-            <Link href="/" className="btn btn-ghost flex-1 justify-center">
-              Home
-            </Link>
+            <Link href="/quiz" className="btn btn-primary flex-1 justify-center">Take Another Test</Link>
+            <Link href="/results" className="btn btn-secondary flex-1 justify-center">View All Results</Link>
+            <Link href="/" className="btn btn-ghost flex-1 justify-center">Home</Link>
           </div>
         </div>
       </div>
     </main>
+  );
+}
+
+export default function QuizCompletePage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen">
+        <Header />
+        <div className="container py-16 text-center">
+          <div className="animate-shimmer">Loading results...</div>
+        </div>
+      </main>
+    }>
+      <QuizCompleteContent />
+    </Suspense>
   );
 }

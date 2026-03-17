@@ -178,14 +178,16 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {results.map((result) => (
+                {results.map((result) => {
+                  const resultId = result.id || `${result.userId}-${result.date}`;
+                  return (
                   <div
-                    key={result.id}
+                    key={resultId}
                     className="card border border-border/50 overflow-hidden hover:border-border transition"
                   >
                     <div
                       className="flex justify-between items-center p-6 cursor-pointer hover:bg-surface-secondary/30 transition"
-                      onClick={() => setExpandedId(expandedId === result.id ? null : result.id)}
+                      onClick={() => setExpandedId(expandedId === resultId ? null : resultId)}
                     >
                       <div className="flex-1">
                         <h3 className="font-bold text-lg mb-1">{result.name}</h3>
@@ -294,7 +296,8 @@ export default function DashboardPage() {
                       </div>
                     )}
                   </div>
-                ))}
+                );
+                })}
               </div>
             )}
           </div>

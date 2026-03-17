@@ -244,7 +244,7 @@ export default function QuizPage() {
             <div className="mb-8">
               <div className="flex justify-between items-center mb-4">
                 <h1 className="text-2xl font-bold">AWS Quiz</h1>
-                <div className="flex gap-6">
+                <div className="flex gap-6 items-center">
                   <div className="text-center">
                     <div className="text-sm text-text-secondary">Question</div>
                     <div className="text-lg font-bold text-primary">
@@ -257,6 +257,12 @@ export default function QuizPage() {
                       {Math.round(progress)}%
                     </div>
                   </div>
+                  <button
+                    onClick={handleQuit}
+                    className="btn btn-sm btn-ghost ml-4"
+                  >
+                    Quit Test
+                  </button>
                 </div>
               </div>
 
@@ -288,29 +294,22 @@ export default function QuizPage() {
 
                 <button
                   onClick={handleSkipQuestion}
-                  className={`btn ${isCurrentSkipped ? 'btn-warning' : 'btn-outline'} order-3 sm:order-2`}
+                  className={`btn ${isCurrentSkipped ? 'btn-warning' : 'btn-outline'} order-2`}
                 >
                   {isCurrentSkipped ? 'Unskip' : 'Skip'}
-                </button>
-
-                <button
-                  onClick={handleQuit}
-                  className="btn btn-ghost order-2 sm:order-3"
-                >
-                  Quit Test
                 </button>
 
                 {currentQuestionIndex === selectedQuestions.length - 1 ? (
                   <button
                     onClick={handleNext}
-                    className="btn btn-primary order-4"
+                    className="btn btn-primary order-3"
                   >
                     Submit Test
                   </button>
                 ) : (
                   <button
                     onClick={handleNext}
-                    className="btn btn-primary order-4"
+                    className="btn btn-primary order-3"
                   >
                     Next Question
                   </button>

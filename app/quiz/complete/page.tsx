@@ -6,18 +6,52 @@ import Link from 'next/link';
 import { Header } from '@/components/header';
 import { QuizResult, WrongQuestion } from '@/lib/quiz-utils';
 
+interface ComparisonStats {
+  userStats: {
+    totalTests: number;
+    passRate: number;
+    averageScore: number;
+    bestScore: number;
+    recentTrend: 'improving' | 'declining' | 'stable';
+  };
+  globalStats: {
+    totalTests: number;
+    averageScore: number;
+    passRate: number;
+  };
+  userPercentile: number;
+}
+
 function QuizCompleteContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [result, setResult] = useState<QuizResult | null>(null);
+  const [stats, setStats] = useState<ComparisonStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const resultData = sessionStorage.getItem('last_quiz_result');
     if (resultData) {
       try {
-        setResult(JSON.parse(resultData));
+        const parsedResult = JSON.parse(resultData);
+        setResult(parsedResult);
         sessionStorage.removeItem('last_quiz_result');
+
+        // Fetch comparison stats
+        if (parsedResult.userId) {
+          const fetchStats = async () => {
+            try {
+              const response = await fetch(`/api/results/compare?userId=${parsedResult.userId}`);
+              if (response.ok) {
+                const statsData = await response.json();
+                setStats(statsData);
+              }
+            } catch (err) {
+              console.error('Error fetching comparison stats:', err);
+            }
+          };
+          fetchStats();
+        }
       } catch (err) {
         console.error('Error parsing result:', err);
       }
@@ -157,6 +191,77 @@ function QuizCompleteContent() {
               </p>
             </div>
           </div>
+
+          {/* Comparison Stats */}
+          {stats && (
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold mb-6">Your Progress & Comparison</h2>
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Your Stats */}
+                <div className="card border border-primary/20">
+                  <h3 className="font-bold text-lg mb-4 text-primary">Your Stats</h3>
+                  <div className="space-y-4">
+                    <div className="flex justify-between">
+                      <span className="text-text-secondary">Total Tests Taken</span>
+                      <span className="font-bold">{stats.userStats.totalTests}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-text-secondary">Pass Rate</span>
+                      <span className="font-bold text-success">{stats.userStats.passRate}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-text-secondary">Average Score</span>
+                      <span className="font-bold text-primary">{stats.userStats.averageScore}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-text-secondary">Best Score</span>
+                      <span className="font-bold text-success">{stats.userStats.bestScore}%</span>
+                    </div>
+                    <div className="flex justify-between pt-2 border-t border-border">
+                      <span className="text-text-secondary">Recent Trend</span>
+                      <span className={`font-bold capitalize ${
+                        stats.userStats.recentTrend === 'improving' ? 'text-success' :
+                        stats.userStats.recentTrend === 'declining' ? 'text-error' :
+                        'text-warning'
+                      }`}>
+                        {stats.userStats.recentTrend}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Comparison */}
+                <div className="card border border-info/20">
+                  <h3 className="font-bold text-lg mb-4 text-info">vs Community</h3>
+                  <div className="space-y-4">
+                    <div className="flex justify-between">
+                      <span className="text-text-secondary">Community Avg Score</span>
+                      <span className="font-bold">{stats.globalStats.averageScore}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-text-secondary">Your Score vs Avg</span>
+                      <span className={`font-bold ${
+                        result.percentage > stats.globalStats.averageScore ? 'text-success' : 'text-error'
+                      }`}>
+                        {result.percentage > stats.globalStats.averageScore ? '+' : ''}{result.percentage - stats.globalStats.averageScore}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-text-secondary">Community Pass Rate</span>
+                      <span className="font-bold">{stats.globalStats.passRate}%</span>
+                    </div>
+                    <div className="flex justify-between pt-2 border-t border-border">
+                      <span className="text-text-secondary">Your Percentile</span>
+                      <span className="font-bold text-primary">{stats.userPercentile}th</span>
+                    </div>
+                    <p className="text-text-secondary text-sm mt-4 pt-4 border-t border-border">
+                      You scored better than {stats.userPercentile}% of all test takers
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-col sm:flex-row gap-4">
             <Link href="/quiz" className="btn btn-primary flex-1 justify-center">Take Another Test</Link>

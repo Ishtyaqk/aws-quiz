@@ -7,6 +7,8 @@ interface QuizQuestionProps {
   questionNumber: number;
   selectedAnswer: string | string[] | undefined;
   onAnswer: (answer: string | string[]) => void;
+  isSkipped?: boolean;
+  onSkip?: () => void;
 }
 
 export default function QuizQuestion({
@@ -14,6 +16,8 @@ export default function QuizQuestion({
   questionNumber,
   selectedAnswer,
   onAnswer,
+  isSkipped = false,
+  onSkip,
 }: QuizQuestionProps) {
   const isMultiple = Array.isArray(question.correct_answer) && question.correct_answer.length > 1;
   const selectedSet = new Set(Array.isArray(selectedAnswer) ? selectedAnswer : selectedAnswer ? [selectedAnswer] : []);
@@ -35,9 +39,14 @@ export default function QuizQuestion({
   return (
     <div className="question-card">
       <div className="mb-6">
-        <h2 className="text-xl font-bold text-text-primary mb-2">
-          Question {questionNumber}
-        </h2>
+        <div className="flex items-start justify-between gap-4 mb-2">
+          <h2 className="text-xl font-bold text-text-primary">
+            Question {questionNumber}
+          </h2>
+          {isSkipped && (
+            <span className="badge badge-warning text-xs">Skipped</span>
+          )}
+        </div>
         <p className="text-lg text-text-secondary">
           {question.question}
         </p>

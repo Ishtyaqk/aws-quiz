@@ -9,13 +9,23 @@ export interface Question {
   correct_answer: string | string[];
 }
 
+export interface QuestionStatus {
+  index: number;
+  answered: boolean;
+  skipped: boolean;
+}
+
 export interface QuizResult {
+  id?: string;
+  userId: string;
   name: string;
   date: string;
   score: number;
   total: number;
   percentage: number;
   wrong_questions: WrongQuestion[];
+  question_statuses?: QuestionStatus[];
+  timeSpent?: number; // in seconds
 }
 
 export interface WrongQuestion {
@@ -80,19 +90,47 @@ export function calculateScore(
   return { correct, wrong };
 }
 
+export function generateOrGetUserId(): string {
+  const STORAGE_KEY = 'aws_quiz_user_id';
+  
+  // Check localStorage
+  if (typeof window !== 'undefined') {
+    const existingId = localStorage.getItem(STORAGE_KEY);
+    if (existingId) {
+      return existingId;
+    }
+  }
+  
+  // Generate new ID
+  const newId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEY, newId);
+  }
+  
+  return newId;
+}
+
 export function generateResult(
   name: string,
   score: number,
   total: number,
-  wrongQuestions: WrongQuestion[]
+  wrongQuestions: WrongQuestion[],
+  userId: string,
+  questionStatuses?: QuestionStatus[],
+  timeSpent?: number
 ): QuizResult {
   return {
+    id: `${userId}_${Date.now()}`,
+    userId,
     name,
     date: new Date().toISOString().split('T')[0],
     score,
     total,
     percentage: Math.round((score / total) * 100),
     wrong_questions: wrongQuestions,
+    question_statuses: questionStatuses,
+    timeSpent,
   };
 }
 

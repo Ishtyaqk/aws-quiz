@@ -12,9 +12,12 @@ async function ensureResultsDir() {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     await ensureResultsDir();
+    const searchParams = request.nextUrl.searchParams;
+    const userId = searchParams.get('userId');
+
     const files = await readdir(RESULTS_DIR);
     const jsonFiles = files.filter(f => f.startsWith('test_') && f.endsWith('.json'));
 
@@ -22,7 +25,14 @@ export async function GET() {
     for (const file of jsonFiles) {
       try {
         const content = await readFile(join(RESULTS_DIR, file), 'utf-8');
-        results.push(JSON.parse(content));
+        const result = JSON.parse(content);
+        
+        // Filter by userId if provided
+        if (userId && result.userId !== userId) {
+          continue;
+        }
+        
+        results.push(result);
       } catch (error) {
         console.error(`Error reading result file ${file}:`, error);
       }
@@ -43,18 +53,18 @@ export async function POST(request: NextRequest) {
     await ensureResultsDir();
     const result = await request.json();
 
-    if (!result.name || result.score === undefined || result.total === undefined) {
+    if (!result.name || result.score === undefined || result.total === undefined || !result.userId) {
       return NextResponse.json(
         { error: 'Invalid result format' },
         { status: 400 }
       );
     }
 
-    // Generate filename from date
+    // Generate filename with userId and timestamp
     const now = new Date();
     const timestamp = now.toISOString().replace(/[:.]/g, '-').split('T')[0] + '_' +
       now.getTime().toString().slice(-6);
-    const filename = `test_${timestamp}.json`;
+    const filename = `test_${result.userId}_${timestamp}.json`;
 
     await writeFile(
       join(RESULTS_DIR, filename),
@@ -62,7 +72,7 @@ export async function POST(request: NextRequest) {
       'utf-8'
     );
 
-    return NextResponse.json({ success: true, filename });
+    return NextResponse.json({ success: true, filename, id: result.id });
   } catch (error) {
     console.error('Error saving result:', error);
     return NextResponse.json(

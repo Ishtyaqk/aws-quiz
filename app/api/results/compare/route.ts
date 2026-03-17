@@ -1,8 +1,5 @@
-import { readdir, readFile } from 'fs/promises';
-import { join } from 'path';
 import { NextRequest, NextResponse } from 'next/server';
-
-const RESULTS_DIR = join(process.cwd(), 'public', 'results');
+import { createClient } from '@/lib/supabase/server';
 
 interface ComparisonStats {
   userStats: {
@@ -22,6 +19,7 @@ interface ComparisonStats {
 
 export async function GET(request: NextRequest) {
   try {
+    const supabase = createClient();
     const searchParams = request.nextUrl.searchParams;
     const userId = searchParams.get('userId');
 
@@ -32,56 +30,56 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const files = await readdir(RESULTS_DIR);
-    const jsonFiles = files.filter(f => f.startsWith('test_') && f.endsWith('.json'));
+    // Fetch all results
+    const { data: allResults, error: allError } = await supabase
+      .from('quiz_results')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    const allResults = [];
-    const userResults = [];
+    // Fetch user results
+    const { data: userResults, error: userError } = await supabase
+      .from('quiz_results')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
 
-    for (const file of jsonFiles) {
-      try {
-        const content = await readFile(join(RESULTS_DIR, file), 'utf-8');
-        const result = JSON.parse(content);
-        allResults.push(result);
-
-        if (result.userId === userId) {
-          userResults.push(result);
-        }
-      } catch (error) {
-        console.error(`Error reading result file ${file}:`, error);
-      }
+    if (allError || userError) {
+      console.error('Error fetching results:', allError || userError);
+      return NextResponse.json(
+        { error: 'Failed to fetch results' },
+        { status: 500 }
+      );
     }
 
-    // Sort by date descending
-    userResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    allResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const results = userResults || [];
+    const allData = allResults || [];
 
     // Calculate user stats
-    const passedTests = userResults.filter(r => r.percentage >= 70);
-    const totalTests = userResults.length;
+    const passedTests = results.filter(r => r.percentage >= 70);
+    const totalTests = results.length;
     const passRate = totalTests > 0 ? Math.round((passedTests.length / totalTests) * 100) : 0;
     const averageScore = totalTests > 0
-      ? Math.round(userResults.reduce((sum, r) => sum + r.percentage, 0) / totalTests)
+      ? Math.round(results.reduce((sum: number, r: any) => sum + r.percentage, 0) / totalTests)
       : 0;
     const bestScore = totalTests > 0
-      ? Math.max(...userResults.map(r => r.percentage))
+      ? Math.max(...results.map((r: any) => r.percentage))
       : 0;
 
-    // Calculate trend (comparing last 5 to previous 5)
+    // Calculate trend
     let recentTrend: 'improving' | 'declining' | 'stable' = 'stable';
-    if (userResults.length >= 10) {
-      const recent = userResults.slice(0, 5);
-      const previous = userResults.slice(5, 10);
-      const recentAvg = recent.reduce((sum, r) => sum + r.percentage, 0) / 5;
-      const previousAvg = previous.reduce((sum, r) => sum + r.percentage, 0) / 5;
+    if (results.length >= 10) {
+      const recent = results.slice(0, 5);
+      const previous = results.slice(5, 10);
+      const recentAvg = recent.reduce((sum: number, r: any) => sum + r.percentage, 0) / 5;
+      const previousAvg = previous.reduce((sum: number, r: any) => sum + r.percentage, 0) / 5;
       if (recentAvg > previousAvg + 5) {
         recentTrend = 'improving';
       } else if (recentAvg < previousAvg - 5) {
         recentTrend = 'declining';
       }
-    } else if (userResults.length >= 2) {
-      const recentAvg = userResults[0].percentage;
-      const previousAvg = userResults[1].percentage;
+    } else if (results.length >= 2) {
+      const recentAvg = results[0].percentage;
+      const previousAvg = results[1].percentage;
       if (recentAvg > previousAvg + 5) {
         recentTrend = 'improving';
       } else if (recentAvg < previousAvg - 5) {
@@ -90,17 +88,17 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate global stats
-    const globalPassedTests = allResults.filter(r => r.percentage >= 70);
-    const globalTotalTests = allResults.length;
+    const globalPassedTests = allData.filter((r: any) => r.percentage >= 70);
+    const globalTotalTests = allData.length;
     const globalPassRate = globalTotalTests > 0
       ? Math.round((globalPassedTests.length / globalTotalTests) * 100)
       : 0;
     const globalAverageScore = globalTotalTests > 0
-      ? Math.round(allResults.reduce((sum, r) => sum + r.percentage, 0) / globalTotalTests)
+      ? Math.round(allData.reduce((sum: number, r: any) => sum + r.percentage, 0) / globalTotalTests)
       : 0;
 
     // Calculate percentile
-    const betterScores = allResults.filter(r => r.percentage > averageScore).length;
+    const betterScores = allData.filter((r: any) => r.percentage > averageScore).length;
     const userPercentile = globalTotalTests > 0
       ? Math.round(((globalTotalTests - betterScores) / globalTotalTests) * 100)
       : 0;

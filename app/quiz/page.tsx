@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Header } from '@/components/header';
-import { Question, selectRandomQuestions, calculateScore, generateResult } from '@/lib/quiz-utils';
+import { Question, selectRandomQuestions, calculateScore, generateResult, generateOrGetUserId, QuestionStatus } from '@/lib/quiz-utils';
 import QuizStart from '@/components/quiz-start';
 import QuizQuestion from '@/components/quiz-question';
+import QuizSidebar from '@/components/quiz-sidebar';
 
 export default function QuizPage() {
   const router = useRouter();
@@ -17,13 +18,22 @@ export default function QuizPage() {
   const [testStarted, setTestStarted] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<number, string | string[]>>({});
+  const [skippedQuestions, setSkippedQuestions] = useState<Set<number>>(new Set());
+  const [questionStatuses, setQuestionStatuses] = useState<QuestionStatus[]>([]);
   const [testCompleted, setTestCompleted] = useState(false);
   const [userName, setUserName] = useState('');
+  const [userId, setUserId] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [startTime, setStartTime] = useState<number | null>(null);
 
-  // Load questions
+  // Load questions and initialize userId
   useEffect(() => {
     const loadQuestions = async () => {
       try {
+        // Initialize userId
+        const id = generateOrGetUserId();
+        setUserId(id);
+
         const response = await fetch('/api/questions');
         if (!response.ok) {
           throw new Error('Failed to load questions');
@@ -47,7 +57,17 @@ export default function QuizPage() {
     setTestStarted(true);
     setCurrentQuestionIndex(0);
     setUserAnswers({});
+    setSkippedQuestions(new Set());
     setTestCompleted(false);
+    setStartTime(Date.now());
+    
+    // Initialize question statuses
+    const statuses: QuestionStatus[] = selected.map((_, idx) => ({
+      index: idx,
+      answered: false,
+      skipped: false,
+    }));
+    setQuestionStatuses(statuses);
   };
 
   const handleAnswer = (answer: string | string[]) => {
@@ -55,6 +75,42 @@ export default function QuizPage() {
       ...prev,
       [currentQuestionIndex]: answer,
     }));
+    
+    // Update question status
+    setQuestionStatuses(prev =>
+      prev.map(status =>
+        status.index === currentQuestionIndex
+          ? { ...status, answered: true, skipped: false }
+          : status
+      )
+    );
+    
+    // Remove from skipped if it was skipped
+    setSkippedQuestions(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(currentQuestionIndex);
+      return newSet;
+    });
+  };
+
+  const handleSkipQuestion = () => {
+    setSkippedQuestions(prev => new Set([...prev, currentQuestionIndex]));
+    
+    // Update question status
+    setQuestionStatuses(prev =>
+      prev.map(status =>
+        status.index === currentQuestionIndex
+          ? { ...status, skipped: true, answered: false }
+          : status
+      )
+    );
+    
+    // Remove answer if it exists
+    setUserAnswers(prev => {
+      const newAnswers = { ...prev };
+      delete newAnswers[currentQuestionIndex];
+      return newAnswers;
+    });
   };
 
   const handleNext = async () => {
@@ -63,7 +119,17 @@ export default function QuizPage() {
     } else {
       // Calculate and save result
       const { correct, wrong } = calculateScore(selectedQuestions, userAnswers);
-      const result = generateResult(userName, correct, selectedQuestions.length, wrong);
+      const timeSpent = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
+      
+      const result = generateResult(
+        userName,
+        correct,
+        selectedQuestions.length,
+        wrong,
+        userId,
+        questionStatuses,
+        timeSpent
+      );
 
       try {
         await fetch('/api/results', {
@@ -85,6 +151,11 @@ export default function QuizPage() {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(prev => prev - 1);
     }
+  };
+
+  const handleJumpToQuestion = (index: number) => {
+    setCurrentQuestionIndex(index);
+    setSidebarOpen(false);
   };
 
   const handleQuit = () => {
@@ -150,12 +221,25 @@ export default function QuizPage() {
   if (selectedQuestions.length > 0 && currentQuestionIndex < selectedQuestions.length) {
     const currentQuestion = selectedQuestions[currentQuestionIndex];
     const progress = ((currentQuestionIndex + 1) / selectedQuestions.length) * 100;
+    const isCurrentSkipped = skippedQuestions.has(currentQuestionIndex);
 
     return (
-      <main className="min-h-screen">
+      <main className="min-h-screen bg-background">
         <Header />
-        <div className="container py-8">
-          <div className="max-w-3xl mx-auto">
+        <div className="flex h-[calc(100vh-80px)]">
+          {/* Sidebar */}
+          <QuizSidebar
+            totalQuestions={selectedQuestions.length}
+            currentQuestionIndex={currentQuestionIndex}
+            questionStatuses={questionStatuses}
+            onQuestionSelect={handleJumpToQuestion}
+            isOpen={sidebarOpen}
+            onToggle={() => setSidebarOpen(!sidebarOpen)}
+          />
+
+          {/* Main Content */}
+          <div className="flex-1 overflow-y-auto py-8">
+            <div className="max-w-3xl mx-auto px-4 sm:px-6">
             {/* Progress Header */}
             <div className="mb-8">
               <div className="flex justify-between items-center mb-4">
@@ -182,48 +266,56 @@ export default function QuizPage() {
               </div>
             </div>
 
-            {/* Question Card */}
-            <QuizQuestion
-              question={currentQuestion}
-              questionNumber={currentQuestionIndex + 1}
-              selectedAnswer={userAnswers[currentQuestionIndex]}
-              onAnswer={handleAnswer}
-            />
+              {/* Question Card */}
+              <QuizQuestion
+                question={currentQuestion}
+                questionNumber={currentQuestionIndex + 1}
+                selectedAnswer={userAnswers[currentQuestionIndex]}
+                onAnswer={handleAnswer}
+                isSkipped={isCurrentSkipped}
+                onSkip={handleSkipQuestion}
+              />
 
-            {/* Navigation Buttons */}
-            <div className="flex gap-4 mt-8 justify-between">
-              <button
-                onClick={handlePrevious}
-                disabled={currentQuestionIndex === 0}
-                className="btn btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-
-              <button
-                onClick={handleQuit}
-                className="btn btn-ghost"
-              >
-                Quit Test
-              </button>
-
-              {currentQuestionIndex === selectedQuestions.length - 1 ? (
+              {/* Navigation Buttons */}
+              <div className="flex flex-col sm:flex-row gap-4 mt-8 justify-between">
                 <button
-                  onClick={handleNext}
-                  disabled={!userAnswers[currentQuestionIndex]}
-                  className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handlePrevious}
+                  disabled={currentQuestionIndex === 0}
+                  className="btn btn-secondary disabled:opacity-50 disabled:cursor-not-allowed order-1"
                 >
-                  Submit Test
+                  Previous
                 </button>
-              ) : (
+
                 <button
-                  onClick={handleNext}
-                  disabled={!userAnswers[currentQuestionIndex]}
-                  className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleSkipQuestion}
+                  className={`btn ${isCurrentSkipped ? 'btn-warning' : 'btn-outline'} order-3 sm:order-2`}
                 >
-                  Next Question
+                  {isCurrentSkipped ? 'Unskip' : 'Skip'}
                 </button>
-              )}
+
+                <button
+                  onClick={handleQuit}
+                  className="btn btn-ghost order-2 sm:order-3"
+                >
+                  Quit Test
+                </button>
+
+                {currentQuestionIndex === selectedQuestions.length - 1 ? (
+                  <button
+                    onClick={handleNext}
+                    className="btn btn-primary order-4"
+                  >
+                    Submit Test
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleNext}
+                    className="btn btn-primary order-4"
+                  >
+                    Next Question
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

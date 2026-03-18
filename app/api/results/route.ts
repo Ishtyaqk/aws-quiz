@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const searchParams = request.nextUrl.searchParams;
     const userId = searchParams.get('userId');
 
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const result = await request.json();
 
     if (!result.name || result.score === undefined || result.total === undefined || !result.userId) {

@@ -1,36 +1,36 @@
-import { readFile, writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
 import { NextRequest, NextResponse } from 'next/server';
-
-const DATA_DIR = join(process.cwd(), 'public', 'data');
-const QUESTIONS_FILE = join(DATA_DIR, 'questions_db.json');
-
-async function ensureDataDir() {
-  try {
-    await mkdir(DATA_DIR, { recursive: true });
-  } catch (error) {
-    // Directory might already exist
-  }
-}
+import { createClient } from '@/lib/supabase/server';
 
 export async function GET() {
   try {
-    await ensureDataDir();
-    const data = await readFile(QUESTIONS_FILE, 'utf-8');
-    const questions = JSON.parse(data);
+    const supabase = await createClient();
+
+    // Get the latest version of questions
+    const { data, error } = await supabase
+      .from('questions_versions')
+      .select('questions')
+      .order('version_number', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      // PGRST116 = no rows found (expected for first time)
+      console.error('Error fetching questions:', error);
+      return NextResponse.json([], { status: 200 });
+    }
+
+    const questions = data?.questions || [];
     return NextResponse.json(questions);
   } catch (error) {
     console.error('Error reading questions:', error);
-    return NextResponse.json([], {
-      status: 200,
-    });
+    return NextResponse.json([], { status: 200 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    await ensureDataDir();
-    const questions = await request.json();
+    const supabase = await createClient();
+    const { questions, uploadedBy = 'anonymous', fileName = 'upload', notes = '' } = await request.json();
 
     if (!Array.isArray(questions)) {
       return NextResponse.json(
@@ -39,10 +39,94 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await writeFile(QUESTIONS_FILE, JSON.stringify(questions, null, 2), 'utf-8');
-    return NextResponse.json({ success: true, count: questions.length });
+    if (questions.length === 0) {
+      return NextResponse.json(
+        { error: 'Cannot upload empty question set' },
+        { status: 400 }
+      );
+    }
+
+    // Get current questions to merge
+    const { data: latestVersion } = await supabase
+      .from('questions_versions')
+      .select('questions, version_number')
+      .order('version_number', { ascending: false })
+      .limit(1)
+      .single();
+
+    const currentQuestions = latestVersion?.questions || [];
+    const newVersionNumber = (latestVersion?.version_number || 0) + 1;
+    const newQuestionsAdded = questions.length;
+    const totalQuestionsAfter = currentQuestions.length + questions.length;
+
+    // Merge old questions with new ones
+    const mergedQuestions = [...currentQuestions, ...questions];
+
+    // Save to versions table
+    const { data: versionData, error: versionError } = await supabase
+      .from('questions_versions')
+      .insert([
+        {
+          version_number: newVersionNumber,
+          questions: mergedQuestions,
+          uploaded_by: uploadedBy,
+          md_file_path: fileName,
+          total_questions: mergedQuestions.length,
+          notes,
+        },
+      ])
+      .select('id, version_number');
+
+    if (versionError) {
+      console.error('Error saving questions version:', versionError);
+      throw new Error('Failed to save questions');
+    }
+
+    // Log to audit trail
+    const { error: auditError } = await supabase
+      .from('upload_audit_log')
+      .insert([
+        {
+          uploaded_by: uploadedBy,
+          file_name: fileName,
+          new_questions_added: newQuestionsAdded,
+          total_questions_after: totalQuestionsAfter,
+          version_number: newVersionNumber,
+          status: 'success',
+          file_path: fileName,
+        },
+      ]);
+
+    if (auditError) {
+      console.error('Error logging audit:', auditError);
+      // Don't fail the upload if audit logging fails
+    }
+
+    return NextResponse.json({
+      success: true,
+      count: newQuestionsAdded,
+      totalQuestions: totalQuestionsAfter,
+      newVersion: newVersionNumber,
+      merged: true,
+      previousCount: currentQuestions.length,
+    });
   } catch (error) {
     console.error('Error saving questions:', error);
+
+    // Log failed upload to audit trail
+    const supabase = await createClient();
+    await supabase.from('upload_audit_log').insert([
+      {
+        uploaded_by: 'system',
+        file_name: 'unknown',
+        new_questions_added: 0,
+        total_questions_after: 0,
+        version_number: 0,
+        status: 'failed',
+        error_message: error instanceof Error ? error.message : 'Unknown error',
+      },
+    ]);
+
     return NextResponse.json(
       { error: 'Failed to save questions' },
       { status: 500 }

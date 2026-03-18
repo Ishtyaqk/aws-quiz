@@ -1,47 +1,30 @@
-import { readdir, readFile, writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
 import { NextRequest, NextResponse } from 'next/server';
-
-const RESULTS_DIR = join(process.cwd(), 'public', 'results');
-
-async function ensureResultsDir() {
-  try {
-    await mkdir(RESULTS_DIR, { recursive: true });
-  } catch (error) {
-    // Directory might already exist
-  }
-}
+import { createClient } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
   try {
-    await ensureResultsDir();
+    const supabase = await createClient();
     const searchParams = request.nextUrl.searchParams;
     const userId = searchParams.get('userId');
 
-    const files = await readdir(RESULTS_DIR);
-    const jsonFiles = files.filter(f => f.startsWith('test_') && f.endsWith('.json'));
+    let query = supabase
+      .from('quiz_results')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    const results = [];
-    for (const file of jsonFiles) {
-      try {
-        const content = await readFile(join(RESULTS_DIR, file), 'utf-8');
-        const result = JSON.parse(content);
-        
-        // Filter by userId if provided
-        if (userId && result.userId !== userId) {
-          continue;
-        }
-        
-        results.push(result);
-      } catch (error) {
-        console.error(`Error reading result file ${file}:`, error);
-      }
+    // Filter by userId if provided
+    if (userId) {
+      query = query.eq('user_id', userId);
     }
 
-    // Sort by date descending
-    results.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const { data: results, error } = await query;
 
-    return NextResponse.json(results);
+    if (error) {
+      console.error('Error fetching results:', error);
+      return NextResponse.json({ error: 'Failed to fetch results' }, { status: 500 });
+    }
+
+    return NextResponse.json(results || []);
   } catch (error) {
     console.error('Error reading results:', error);
     return NextResponse.json([]);
@@ -50,7 +33,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await ensureResultsDir();
+    const supabase = await createClient();
     const result = await request.json();
 
     if (!result.name || result.score === undefined || result.total === undefined || !result.userId) {
@@ -60,19 +43,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate filename with userId and timestamp
-    const now = new Date();
-    const timestamp = now.toISOString().replace(/[:.]/g, '-').split('T')[0] + '_' +
-      now.getTime().toString().slice(-6);
-    const filename = `test_${result.userId}_${timestamp}.json`;
+    // Insert into Supabase
+    const { data, error } = await supabase
+      .from('quiz_results')
+      .insert([
+        {
+          user_id: result.userId,
+          name: result.name,
+          score: result.score,
+          total: result.total,
+          percentage: result.percentage,
+          wrong_questions: result.wrong_questions,
+          question_statuses: result.question_statuses,
+          time_spent: result.timeSpent,
+        },
+      ])
+      .select();
 
-    await writeFile(
-      join(RESULTS_DIR, filename),
-      JSON.stringify(result, null, 2),
-      'utf-8'
-    );
+    if (error) {
+      console.error('Error saving result:', error);
+      return NextResponse.json(
+        { error: 'Failed to save result' },
+        { status: 500 }
+      );
+    }
 
-    return NextResponse.json({ success: true, filename, id: result.id });
+    return NextResponse.json({ success: true, id: data?.[0]?.id });
   } catch (error) {
     console.error('Error saving result:', error);
     return NextResponse.json(

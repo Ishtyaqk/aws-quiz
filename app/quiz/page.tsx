@@ -239,7 +239,7 @@ export default function QuizPage() {
 
           {/* Main Content */}
           <div className="flex-1 overflow-y-auto py-8">
-            <div className="max-w-3xl mx-auto px-4 sm:px-6">
+            <div className="w-full px-4 sm:px-6 md:px-8 lg:px-12">
             {/* Progress Header */}
             <div className="mb-8">
               <div className="flex justify-between items-center mb-4">

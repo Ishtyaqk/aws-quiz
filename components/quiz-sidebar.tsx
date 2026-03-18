@@ -98,11 +98,11 @@ export default function QuizSidebar({
               const status = getQuestionStatus(index);
               const isCurrentQuestion = index === currentQuestionIndex;
 
-              let statusClass = 'bg-gray-300 hover:bg-gray-400';
+              let statusClass = 'bg-transparent border border-border hover:border-text-secondary/50';
               if (status === 'answered') {
-                statusClass = 'bg-success hover:bg-success/80';
+                statusClass = 'bg-success hover:bg-success/80 border-0';
               } else if (status === 'skipped') {
-                statusClass = 'bg-warning hover:bg-warning/80';
+                statusClass = 'bg-warning hover:bg-warning/80 border-0';
               }
 
               return (

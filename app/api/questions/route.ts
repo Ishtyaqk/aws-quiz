@@ -10,16 +10,19 @@ export async function GET() {
       .from('questions_versions')
       .select('questions')
       .order('version_number', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
 
-    if (error && error.code !== 'PGRST116') {
-      // PGRST116 = no rows found (expected for first time)
+    if (error) {
       console.error('Error fetching questions:', error);
       return NextResponse.json([], { status: 200 });
     }
 
-    const questions = data?.questions || [];
+    // If no data, return empty array (no questions uploaded yet)
+    if (!data || data.length === 0) {
+      return NextResponse.json([], { status: 200 });
+    }
+
+    const questions = data[0]?.questions || [];
     return NextResponse.json(questions);
   } catch (error) {
     console.error('Error reading questions:', error);

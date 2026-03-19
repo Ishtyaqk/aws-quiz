@@ -1,5 +1,71 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
+
+async function getQuestionsFromFile() {
+  try {
+    const filePath = join(process.cwd(), 'public', 'data', 'questions_db.json');
+    const data = await readFile(filePath, 'utf-8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error reading questions file:', error);
+    return [];
+  }
+}
+
+async function migrateQuestionsToSupabase(supabase: any, questions: any[]) {
+  try {
+    if (questions.length === 0) return false;
+
+    // Check if version 1 already exists
+    const { data: existing } = await supabase
+      .from('questions_versions')
+      .select('id')
+      .eq('version_number', 1);
+
+    if (existing && existing.length > 0) {
+      console.log('Questions already migrated to Supabase');
+      return false;
+    }
+
+    // Insert as version 1
+    const { error } = await supabase.from('questions_versions').insert([
+      {
+        version_number: 1,
+        questions,
+        uploaded_by: 'system',
+        md_file_path: 'initial_migration',
+        total_questions: questions.length,
+        notes: 'Automatic migration from questions_db.json',
+      },
+    ]);
+
+    if (error) {
+      console.error('Migration error:', error);
+      return false;
+    }
+
+    // Log migration
+    await supabase.from('upload_audit_log').insert([
+      {
+        uploaded_by: 'system',
+        file_name: 'initial_migration',
+        new_questions_added: questions.length,
+        total_questions_after: questions.length,
+        version_number: 1,
+        status: 'success',
+        file_path: 'questions_db.json',
+      },
+    ]);
+
+    console.log(`Successfully migrated ${questions.length} questions to Supabase`);
+    return true;
+  } catch (error) {
+    console.error('Failed to migrate questions:', error);
+    return false;
+  }
+}
 
 export async function GET() {
   try {
@@ -17,8 +83,18 @@ export async function GET() {
       return NextResponse.json([], { status: 200 });
     }
 
-    // If no data, return empty array (no questions uploaded yet)
+    // If no data in Supabase, try to migrate from file
     if (!data || data.length === 0) {
+      console.log('No questions in Supabase, attempting automatic migration...');
+      const fileQuestions = await getQuestionsFromFile();
+
+      if (fileQuestions.length > 0) {
+        const migrated = await migrateQuestionsToSupabase(supabase, fileQuestions);
+        if (migrated) {
+          return NextResponse.json(fileQuestions);
+        }
+      }
+
       return NextResponse.json([], { status: 200 });
     }
 

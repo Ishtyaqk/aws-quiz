@@ -11,6 +11,8 @@ export default function AggregatorPage() {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<Question[]>([]);
+  const [uploadedBy, setUploadedBy] = useState('');
+  const [notes, setNotes] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,6 +62,11 @@ export default function AggregatorPage() {
       return;
     }
 
+    if (!uploadedBy.trim()) {
+      setError('Please enter your name/identifier');
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
@@ -67,7 +74,12 @@ export default function AggregatorPage() {
       const response = await fetch('/api/questions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(preview),
+        body: JSON.stringify({
+          questions: preview,
+          uploadedBy: uploadedBy.trim(),
+          fileName: files.map(f => f.name).join(', '),
+          notes: notes.trim(),
+        }),
       });
 
       if (!response.ok) {
@@ -75,9 +87,11 @@ export default function AggregatorPage() {
       }
 
       const result = await response.json();
-      setSuccess(`Successfully uploaded ${result.count} questions!`);
+      setSuccess(`Successfully uploaded ${result.count} new questions! Total questions now: ${result.totalQuestions} (v${result.newVersion})`);
       setFiles([]);
       setPreview([]);
+      setUploadedBy('');
+      setNotes('');
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -157,6 +171,28 @@ export default function AggregatorPage() {
                   </div>
                 </div>
               )}
+
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="form-label">Your Name / Identifier</label>
+                  <input
+                    type="text"
+                    value={uploadedBy}
+                    onChange={(e) => setUploadedBy(e.target.value)}
+                    placeholder="e.g., John Doe, admin@company.com"
+                    className="input input-bordered w-full"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Upload Notes (Optional)</label>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="e.g., AWS Certified Solutions Architect questions, batch 2"
+                    className="textarea textarea-bordered w-full h-20"
+                  />
+                </div>
+              </div>
 
               <div className="space-y-3">
                 <button

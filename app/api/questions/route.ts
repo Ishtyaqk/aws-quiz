@@ -197,20 +197,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error saving questions:', error);
 
-    // Log failed upload to audit trail
-    const supabase = await createClient();
-    await supabase.from('upload_audit_log').insert([
-      {
-        uploaded_by: 'system',
-        file_name: 'unknown',
-        new_questions_added: 0,
-        total_questions_after: 0,
-        version_number: 0,
-        status: 'failed',
-        error_message: error instanceof Error ? error.message : 'Unknown error',
-      },
-    ]);
-
     const message = error instanceof Error ? error.message : 'Failed to save questions';
     return NextResponse.json(
       { error: message },

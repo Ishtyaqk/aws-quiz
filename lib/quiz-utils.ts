@@ -143,71 +143,149 @@ export function formatDate(dateString: string): string {
   });
 }
 
-export function parseMarkdown(content: string): Question[] {
-  const questions: Question[] = [];
-  const questionBlocks = content.split(/\n(?=\d+\.)/);
+export interface QuestionOption {
+  letter: string;
+  text: string;
+}
 
-  for (const block of questionBlocks) {
-    if (!block.trim()) continue;
+export interface MarkdownParseReport {
+  questions: Question[];
+  detectedCount: number;
+  parsedCount: number;
+  skippedCount: number;
+}
 
-    const lines = block.trim().split('\n');
-    const questionLine = lines[0];
+function normalizeMarkdownContent(content: string): string {
+  return content.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
 
-    const questionMatch = questionLine.match(/^\d+\.\s*(.*)/);
-    if (!questionMatch) continue;
+function splitQuestionBlocks(content: string): string[] {
+  const normalized = normalizeMarkdownContent(content);
+  const starts: number[] = [];
+  const pattern = /(?:^|\n)(\d+\.\s+)/g;
+  let match: RegExpExecArray | null;
 
-    const questionText = questionMatch[1];
-    const options: QuestionOption[] = [];
-    let answerLine = '';
+  while ((match = pattern.exec(normalized)) !== null) {
+    starts.push(match.index + (match[0].startsWith('\n') ? 1 : 0));
+  }
 
-    let inAnswerSection = false;
+  if (starts.length === 0) return [];
 
-    for (const line of lines.slice(1)) {
-      const trimmedLine = line.trim();
+  const blocks: string[] = [];
+  for (let i = 0; i < starts.length; i++) {
+    blocks.push(normalized.slice(starts[i], starts[i + 1]).trim());
+  }
+  return blocks;
+}
 
-      if (trimmedLine.includes('<details') || trimmedLine.includes('Answer</summary>')) {
-        inAnswerSection = true;
-        continue;
-      } else if (trimmedLine.includes('</details>')) {
-        inAnswerSection = false;
-        continue;
-      }
+function parseAnswerLetters(raw: string): string[] {
+  const text = raw.replace(/\*\*/g, '').split(/\bExplanation\b/i)[0].trim();
+  const parts = text.split(/[,/&]|(?:\s+and\s+)/i).map(part => part.trim()).filter(Boolean);
+  const fromParts = parts
+    .map(part => part.match(/^([A-F])\.?$/i)?.[1]?.toUpperCase())
+    .filter((letter): letter is string => Boolean(letter));
 
-      if (!inAnswerSection && trimmedLine.startsWith('- ')) {
-        const optionMatch = trimmedLine.match(/- ([A-E])\.\s*(.*)/);
-        if (optionMatch) {
-          options.push({
-            letter: optionMatch[1],
-            text: optionMatch[2],
-          });
-        }
-      } else if (inAnswerSection && trimmedLine.includes('Correct answer:')) {
-        const answerMatch = trimmedLine.match(/Correct answer:\s*([A-E,\s]+)/);
-        if (answerMatch) {
-          const answerText = answerMatch[1].replace(/\s/g, '');
-          const answerLetters = answerText.split(',').filter(l => l);
-          answerLine = answerLetters.length === 1 ? answerLetters[0] : JSON.stringify(answerLetters);
-        }
+  if (fromParts.length > 0) return fromParts;
+
+  const compact = text.replace(/\s/g, '');
+  if (/^[A-F]+$/i.test(compact)) {
+    return compact.toUpperCase().split('');
+  }
+
+  return [];
+}
+
+function extractCorrectAnswer(lines: string[]): string | string[] | null {
+  for (const line of lines) {
+    const trimmed = line.trim();
+    let answerText: string | null = null;
+
+    const standardMatch = trimmed.match(/(?:\*\*)?(?:correct\s+answer|answer)(?:\*\*)?\s*:\s*(.+)$/i);
+    if (standardMatch) {
+      answerText = standardMatch[1];
+    } else {
+      const typoMatch = trimmed.match(/^Correct\s+(?:Answer\s*:\s*)?([A-F][A-F,\s]*)$/i);
+      if (typoMatch) {
+        answerText = typoMatch[1];
       }
     }
 
-    if (questionText && options.length >= 2 && answerLine) {
-      let correctAnswer: string | string[] = answerLine;
-      try {
-        if (answerLine.startsWith('[')) {
-          correctAnswer = JSON.parse(answerLine);
-        }
-      } catch {
-        correctAnswer = answerLine;
-      }
+    if (!answerText) continue;
 
-      questions.push({
-        question: questionText,
-        options,
-        correct_answer: correctAnswer,
+    const letters = parseAnswerLetters(answerText);
+    if (letters.length === 0) continue;
+    return letters.length === 1 ? letters[0] : letters;
+  }
+
+  return null;
+}
+
+function extractOptions(lines: string[]): QuestionOption[] {
+  const options: QuestionOption[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^(?:correct\s+answer|answer)\s*:/i.test(trimmed) || /^Correct\s/i.test(trimmed)) break;
+    if (/<details|<\/details>|^<summary|^Explanation:/i.test(trimmed)) continue;
+
+    const match = trimmed.match(/^[-*•]?\s*(?:\*\*)?([A-F])[\.\):]\s*(?:\*\*)?(.*)$/i);
+    if (match) {
+      options.push({
+        letter: match[1].toUpperCase(),
+        text: match[2].replace(/\*\*/g, '').trim(),
       });
     }
   }
 
-  return questions;
+  return options;
+}
+
+function parseQuestionBlock(block: string): Question | null {
+  const lines = block.trim().split('\n');
+  if (lines.length === 0) return null;
+
+  const questionMatch = lines[0].match(/^\d+\.\s*(.*)/);
+  if (!questionMatch) return null;
+
+  const questionText = questionMatch[1]
+    .replace(/\*\*/g, '')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const bodyLines = lines.slice(1);
+  const options = extractOptions(bodyLines);
+  const correctAnswer = extractCorrectAnswer(bodyLines);
+
+  if (!questionText || options.length < 2 || !correctAnswer) {
+    return null;
+  }
+
+  return {
+    question: questionText,
+    options,
+    correct_answer: correctAnswer,
+  };
+}
+
+export function parseMarkdownWithReport(content: string): MarkdownParseReport {
+  const blocks = splitQuestionBlocks(content);
+  const questions: Question[] = [];
+
+  for (const block of blocks) {
+    const question = parseQuestionBlock(block);
+    if (question) {
+      questions.push(question);
+    }
+  }
+
+  return {
+    questions,
+    detectedCount: blocks.length,
+    parsedCount: questions.length,
+    skippedCount: blocks.length - questions.length,
+  };
+}
+
+export function parseMarkdown(content: string): Question[] {
+  return parseMarkdownWithReport(content).questions;
 }

@@ -24,28 +24,49 @@ create table if not exists public.upload_audit_log (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- Add columns if tables already existed with an older schema
+alter table public.questions_versions add column if not exists version_number integer;
+alter table public.questions_versions add column if not exists questions jsonb default '[]'::jsonb;
+alter table public.questions_versions add column if not exists uploaded_by text default 'anonymous';
+alter table public.questions_versions add column if not exists md_file_path text;
+alter table public.questions_versions add column if not exists total_questions integer default 0;
+alter table public.questions_versions add column if not exists notes text;
+alter table public.questions_versions add column if not exists created_at timestamp with time zone default timezone('utc'::text, now());
+
+alter table public.upload_audit_log add column if not exists uploaded_by text default 'anonymous';
+alter table public.upload_audit_log add column if not exists file_name text;
+alter table public.upload_audit_log add column if not exists new_questions_added integer default 0;
+alter table public.upload_audit_log add column if not exists total_questions_after integer default 0;
+alter table public.upload_audit_log add column if not exists version_number integer default 0;
+alter table public.upload_audit_log add column if not exists status text default 'pending';
+alter table public.upload_audit_log add column if not exists error_message text;
+alter table public.upload_audit_log add column if not exists file_path text;
+alter table public.upload_audit_log add column if not exists created_at timestamp with time zone default timezone('utc'::text, now());
+
 alter table public.questions_versions enable row level security;
 alter table public.upload_audit_log enable row level security;
 
--- Anyone can read the question bank (quiz loads latest version)
+-- Policies (drop first so re-running this script is safe)
+drop policy if exists "questions_versions_select_public" on public.questions_versions;
+drop policy if exists "questions_versions_insert_public" on public.questions_versions;
+drop policy if exists "upload_audit_log_select_public" on public.upload_audit_log;
+drop policy if exists "upload_audit_log_insert_public" on public.upload_audit_log;
+
 create policy "questions_versions_select_public"
   on public.questions_versions
   for select
   using (true);
 
--- Anyone can insert new versions (aggregator uploads)
 create policy "questions_versions_insert_public"
   on public.questions_versions
   for insert
   with check (true);
 
--- Anyone can read upload history
 create policy "upload_audit_log_select_public"
   on public.upload_audit_log
   for select
   using (true);
 
--- Anyone can insert audit entries
 create policy "upload_audit_log_insert_public"
   on public.upload_audit_log
   for insert

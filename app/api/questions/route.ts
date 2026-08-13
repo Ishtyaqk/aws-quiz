@@ -125,13 +125,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get current questions to merge
-    const { data: latestVersion } = await supabase
+    // Get current questions to merge (maybeSingle avoids error when table is empty)
+    const { data: latestVersion, error: fetchError } = await supabase
       .from('questions_versions')
       .select('questions, version_number')
       .order('version_number', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error('Error fetching latest version:', fetchError);
+      throw new Error(fetchError.message);
+    }
 
     const currentQuestions = latestVersion?.questions || [];
     const newVersionNumber = (latestVersion?.version_number || 0) + 1;
@@ -158,7 +163,7 @@ export async function POST(request: NextRequest) {
 
     if (versionError) {
       console.error('Error saving questions version:', versionError);
-      throw new Error('Failed to save questions');
+      throw new Error(versionError.message || 'Failed to save questions');
     }
 
     // Log to audit trail
@@ -206,8 +211,9 @@ export async function POST(request: NextRequest) {
       },
     ]);
 
+    const message = error instanceof Error ? error.message : 'Failed to save questions';
     return NextResponse.json(
-      { error: 'Failed to save questions' },
+      { error: message },
       { status: 500 }
     );
   }

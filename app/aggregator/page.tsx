@@ -48,7 +48,7 @@ export default function AggregatorPage() {
       }
 
       setPreview(allQuestions);
-      setSuccess(`Parsed ${allQuestions.length} questions from ${files.length} file(s)`);
+      setSuccess(`Parsed ${allQuestions.length} questions from ${files.length} file(s). Review below, then click "Upload to Database" to save to Supabase.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error parsing files');
     } finally {
@@ -83,7 +83,8 @@ export default function AggregatorPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save questions');
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || 'Failed to save questions');
       }
 
       const result = await response.json();
@@ -274,6 +275,12 @@ export default function AggregatorPage() {
 
           {success && (
             <div className="alert alert-success mb-6">{success}</div>
+          )}
+
+          {preview.length > 0 && !success.includes('Successfully uploaded') && (
+            <div className="alert alert-warning mb-6">
+              Preview only — questions are not saved yet. Enter your name and click <strong>Upload to Database</strong> to persist them in Supabase.
+            </div>
           )}
 
           {/* Preview Section */}

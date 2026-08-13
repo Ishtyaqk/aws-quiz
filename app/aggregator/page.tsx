@@ -3,7 +3,14 @@
 import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { Header } from '@/components/header';
-import { parseMarkdown, Question } from '@/lib/quiz-utils';
+import { parseMarkdownWithReport, Question } from '@/lib/quiz-utils';
+
+interface FileParseSummary {
+  fileName: string;
+  detected: number;
+  parsed: number;
+  skipped: number;
+}
 
 export default function AggregatorPage() {
   const [files, setFiles] = useState<File[]>([]);
@@ -11,6 +18,7 @@ export default function AggregatorPage() {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<Question[]>([]);
+  const [parseSummary, setParseSummary] = useState<FileParseSummary[]>([]);
   const [uploadedBy, setUploadedBy] = useState('');
   const [notes, setNotes] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -28,6 +36,7 @@ export default function AggregatorPage() {
     setError('');
     setSuccess('');
     setPreview([]);
+    setParseSummary([]);
   };
 
   const handlePreview = async () => {
@@ -39,16 +48,33 @@ export default function AggregatorPage() {
     try {
       setLoading(true);
       setError('');
+      const summaries: FileParseSummary[] = [];
       let allQuestions: Question[] = [];
 
       for (const file of files) {
         const content = await file.text();
-        const questions = parseMarkdown(content);
-        allQuestions = allQuestions.concat(questions);
+        const report = parseMarkdownWithReport(content);
+        summaries.push({
+          fileName: file.name,
+          detected: report.detectedCount,
+          parsed: report.parsedCount,
+          skipped: report.skippedCount,
+        });
+        allQuestions = allQuestions.concat(report.questions);
       }
 
+      const totalDetected = summaries.reduce((sum, s) => sum + s.detected, 0);
+      const totalSkipped = summaries.reduce((sum, s) => sum + s.skipped, 0);
+
+      setParseSummary(summaries);
       setPreview(allQuestions);
-      setSuccess(`Parsed ${allQuestions.length} questions from ${files.length} file(s). Review below, then click "Upload to Database" to save to Supabase.`);
+
+      let message = `Parsed ${allQuestions.length} of ${totalDetected} detected questions from ${files.length} file(s).`;
+      if (totalSkipped > 0) {
+        message += ` ${totalSkipped} question block(s) were skipped — see breakdown below. Common causes: missing "Correct answer:", options not formatted as "- A. ...", or numbering not starting with "1. ".`;
+      }
+      message += ' Review below, then click "Upload to Database" to save to Supabase.';
+      setSuccess(message);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error parsing files');
     } finally {
@@ -91,6 +117,7 @@ export default function AggregatorPage() {
       setSuccess(`Successfully uploaded ${result.count} new questions! Total questions now: ${result.totalQuestions} (v${result.newVersion})`);
       setFiles([]);
       setPreview([]);
+      setParseSummary([]);
       setUploadedBy('');
       setNotes('');
       if (fileInputRef.current) {
@@ -106,6 +133,7 @@ export default function AggregatorPage() {
   const handleClear = () => {
     setFiles([]);
     setPreview([]);
+    setParseSummary([]);
     setError('');
     setSuccess('');
     if (fileInputRef.current) {
@@ -259,10 +287,10 @@ export default function AggregatorPage() {
               <div className="bg-info/10 border border-info/30 rounded-lg p-4">
                 <h3 className="font-bold text-info mb-2">Tips</h3>
                 <ul className="text-sm text-text-secondary space-y-1">
-                  <li>• Use letters A-E for options</li>
-                  <li>• Separate questions with line breaks</li>
-                  <li>• Wrap answers in HTML details tags</li>
-                  <li>• One file can contain multiple questions</li>
+                  <li>• Use letters A-F for options</li>
+                  <li>• Number each question: <code>1. Question text?</code></li>
+                  <li>• Options: <code>- A. Option text</code> (also supports * or A.)</li>
+                  <li>• Include <code>Correct answer: A</code> (details tags optional)</li>
                 </ul>
               </div>
             </div>
@@ -280,6 +308,36 @@ export default function AggregatorPage() {
           {preview.length > 0 && !success.includes('Successfully uploaded') && (
             <div className="alert alert-warning mb-6">
               Preview only — questions are not saved yet. Enter your name and click <strong>Upload to Database</strong> to persist them in Supabase.
+            </div>
+          )}
+
+          {parseSummary.length > 0 && (
+            <div className="card mb-6">
+              <h2 className="text-xl font-bold mb-4">Parse breakdown by file</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left border-b border-border">
+                      <th className="py-2 pr-4">File</th>
+                      <th className="py-2 pr-4">Detected</th>
+                      <th className="py-2 pr-4">Parsed</th>
+                      <th className="py-2">Skipped</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parseSummary.map((row) => (
+                      <tr key={row.fileName} className="border-b border-border/50">
+                        <td className="py-2 pr-4 truncate max-w-xs">{row.fileName}</td>
+                        <td className="py-2 pr-4">{row.detected}</td>
+                        <td className="py-2 pr-4">{row.parsed}</td>
+                        <td className={`py-2 ${row.skipped > 0 ? 'text-warning font-semibold' : ''}`}>
+                          {row.skipped}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 

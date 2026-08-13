@@ -1,58 +1,46 @@
--- Versioned question bank (each upload creates a new version with merged questions)
-create table if not exists public.questions_versions (
-  id uuid primary key default gen_random_uuid(),
-  version_number integer not null unique,
-  questions jsonb not null default '[]'::jsonb,
-  uploaded_by text not null default 'anonymous',
-  md_file_path text,
-  total_questions integer not null default 0,
-  notes text,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+-- Question uploads: versioned question bank + upload audit trail
+-- (Separate from 001_create_quiz_results.sql which is only for quiz scores)
+
+-- Questions versioning table
+CREATE TABLE IF NOT EXISTS public.questions_versions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  version_number INTEGER NOT NULL UNIQUE,
+  questions JSONB NOT NULL,
+  uploaded_by TEXT NOT NULL,
+  uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  md_file_path TEXT,
+  total_questions INTEGER NOT NULL,
+  notes TEXT
 );
 
--- Audit trail for markdown uploads
-create table if not exists public.upload_audit_log (
-  id uuid primary key default gen_random_uuid(),
-  uploaded_by text not null default 'anonymous',
-  file_name text,
-  new_questions_added integer not null default 0,
-  total_questions_after integer not null default 0,
-  version_number integer not null default 0,
-  status text not null default 'pending',
-  error_message text,
-  file_path text,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+-- Audit log table
+CREATE TABLE IF NOT EXISTS public.upload_audit_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  upload_timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  uploaded_by TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  file_path TEXT,
+  new_questions_added INTEGER NOT NULL,
+  total_questions_after INTEGER NOT NULL,
+  version_number INTEGER NOT NULL REFERENCES public.questions_versions(version_number),
+  status TEXT DEFAULT 'success',
+  error_message TEXT
 );
 
-alter table public.questions_versions enable row level security;
-alter table public.upload_audit_log enable row level security;
+ALTER TABLE public.questions_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.upload_audit_log ENABLE ROW LEVEL SECURITY;
 
--- Anyone can read the question bank (quiz loads latest version)
-create policy "questions_versions_select_public"
-  on public.questions_versions
-  for select
-  using (true);
+DROP POLICY IF EXISTS "Allow public select versions" ON public.questions_versions;
+DROP POLICY IF EXISTS "Allow public select audit" ON public.upload_audit_log;
+DROP POLICY IF EXISTS "Allow public insert versions" ON public.questions_versions;
+DROP POLICY IF EXISTS "Allow public insert audit" ON public.upload_audit_log;
 
--- Anyone can insert new versions (aggregator uploads)
-create policy "questions_versions_insert_public"
-  on public.questions_versions
-  for insert
-  with check (true);
+CREATE POLICY "Allow public select versions" ON public.questions_versions FOR SELECT USING (true);
+CREATE POLICY "Allow public select audit" ON public.upload_audit_log FOR SELECT USING (true);
+CREATE POLICY "Allow public insert versions" ON public.questions_versions FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public insert audit" ON public.upload_audit_log FOR INSERT WITH CHECK (true);
 
--- Anyone can read upload history
-create policy "upload_audit_log_select_public"
-  on public.upload_audit_log
-  for select
-  using (true);
-
--- Anyone can insert audit entries
-create policy "upload_audit_log_insert_public"
-  on public.upload_audit_log
-  for insert
-  with check (true);
-
-create index if not exists idx_questions_versions_version_number
-  on public.questions_versions(version_number desc);
-
-create index if not exists idx_upload_audit_log_created_at
-  on public.upload_audit_log(created_at desc);
+CREATE INDEX IF NOT EXISTS idx_questions_versions_uploaded_at ON public.questions_versions(uploaded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_questions_versions_version_number ON public.questions_versions(version_number DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_uploaded_by ON public.upload_audit_log(uploaded_by);
+CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON public.upload_audit_log(upload_timestamp DESC);
